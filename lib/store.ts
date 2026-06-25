@@ -140,6 +140,66 @@ export function generatePost(prompt: string, style: PostStyle): GeneratedPost {
   }
 }
 
+export interface AIGeneratedContent {
+  title: string
+  body: string
+  hashtags: string
+  simulated: boolean
+}
+
+export async function generatePostWithAI(
+  prompt: string,
+  style: PostStyle
+): Promise<AIGeneratedContent> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error("Supabase configuration missing")
+  }
+
+  const response = await fetch(`${supabaseUrl}/functions/v1/generate-post`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${supabaseAnonKey}`,
+      apikey: supabaseAnonKey,
+    },
+    body: JSON.stringify({ prompt, style }),
+  })
+
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}))
+    throw new Error(errData.error ?? `Request failed with status ${response.status}`)
+  }
+
+  const data = await response.json()
+  return {
+    title: data.title,
+    body: data.body,
+    hashtags: data.hashtags,
+    simulated: data.simulated ?? false,
+  }
+}
+
+export function buildPostFromAI(
+  content: AIGeneratedContent,
+  prompt: string,
+  style: PostStyle
+): GeneratedPost {
+  const config = styleConfig[style]
+  return {
+    id: `post_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    title: content.title,
+    body: content.body,
+    hashtags: content.hashtags,
+    style,
+    prompt,
+    createdAt: new Date(),
+    gradient: config.gradient,
+  }
+}
+
 // Local storage helpers
 const STORAGE_KEY = "ai_post_studio_history"
 

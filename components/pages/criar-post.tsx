@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useCallback } from "react"
-import { Sparkles, Copy, Download, Check, RefreshCw, Wand2, ChevronDown } from "lucide-react"
-import { GeneratedPost, PostStyle, generatePost, styleConfig } from "@/lib/store"
+import { Sparkles, Copy, Download, Check, RefreshCw, Wand as Wand2, CircleAlert as AlertCircle, Zap } from "lucide-react"
+import { GeneratedPost, PostStyle, generatePost, generatePostWithAI, buildPostFromAI, styleConfig } from "@/lib/store"
 import { PostPreview } from "@/components/post-preview"
 import { cn } from "@/lib/utils"
 
@@ -28,19 +28,32 @@ export function CriarPostPage({ onPostGenerated, initialPrompt = "" }: CriarPost
   const [isLoading, setIsLoading] = useState(false)
   const [copied, setCopied] = useState(false)
   const [styleOpen, setStyleOpen] = useState(false)
+  const [isSimulated, setIsSimulated] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim()) return
     setIsLoading(true)
     setGeneratedPost(null)
+    setError(null)
 
-    // Simulate AI delay
-    await new Promise((r) => setTimeout(r, 1800 + Math.random() * 800))
-
-    const post = generatePost(prompt, style)
-    setGeneratedPost(post)
-    onPostGenerated(post)
-    setIsLoading(false)
+    try {
+      const content = await generatePostWithAI(prompt, style)
+      const post = buildPostFromAI(content, prompt, style)
+      setGeneratedPost(post)
+      setIsSimulated(content.simulated)
+      onPostGenerated(post)
+    } catch (err) {
+      // Fallback to local generation if API fails
+      console.warn("AI generation failed, using fallback:", err)
+      const post = generatePost(prompt, style)
+      setGeneratedPost(post)
+      setIsSimulated(true)
+      setError("IA indisponível no momento. Gerando versão de demonstração.")
+      onPostGenerated(post)
+    } finally {
+      setIsLoading(false)
+    }
   }, [prompt, style, onPostGenerated])
 
   const handleCopy = useCallback(() => {
@@ -201,6 +214,36 @@ export function CriarPostPage({ onPostGenerated, initialPrompt = "" }: CriarPost
           <p className="text-center text-[11px] text-muted-foreground -mt-2">
             Atalho: Ctrl+Enter (ou Cmd+Enter)
           </p>
+
+          {error && (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-400">
+              <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {generatedPost && !isLoading && (
+            <div
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium",
+                isSimulated
+                  ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                  : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+              )}
+            >
+              {isSimulated ? (
+                <>
+                  <AlertCircle className="h-3 w-3" />
+                  Modo demonstração — configure a chave do Gemini para IA real
+                </>
+              ) : (
+                <>
+                  <Zap className="h-3 w-3" fill="currentColor" />
+                  Gerado com Gemini IA
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Right: Preview */}
